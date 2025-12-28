@@ -287,7 +287,7 @@ with st.sidebar:
     - "Bu derste hangi konular var?"
     - "Python'da döngü nedir?"
     - "Fonksiyon örnekleri ver"
-    - "Liste ve tuple farkı nedir?"
+    - "CSS nedir"
     """)
     
     st.markdown("---")
