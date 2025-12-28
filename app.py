@@ -1,5 +1,5 @@
 
-# DERS NOTU ANALİZ ASİSTANI - CLOUD
+# DERS NOTU ANALİZ ASİSTANI - CLOUD 
 
 
 import os
@@ -28,9 +28,8 @@ st.set_page_config(
 st.title("🎓 Ders Notu Analiz Asistanı - Cloud")
 st.markdown("---")
 
-# ==============================
 # EMBEDDING MODEL
-# ==============================
+
 
 @st.cache_resource
 def load_embedding_model():
@@ -39,7 +38,9 @@ def load_embedding_model():
 
 embedding_model = load_embedding_model()
 
+
 # SİSTEM BAŞLATMA
+
 
 @st.cache_resource
 def initialize_clients():
@@ -88,6 +89,7 @@ groq_client, qdrant_client, collection_name = initialize_clients()
 st.markdown("---")
 
 # YARDIMCI FONKSİYONLAR
+
 
 def create_embedding(text):
     """Gerçek embedding oluştur (sentence-transformers ile)"""
@@ -160,6 +162,7 @@ CEVAP (Türkçe):"""
 
 # PDF YÜKLEME (Admin Panel)
 
+
 with st.sidebar:
     st.header("📤 Ders Notu Yükle")
     
@@ -208,7 +211,7 @@ with st.sidebar:
                     progress_bar.progress(progress)
                 
                 st.success(f"✅ {len(text_chunks)} metin parçası başarıyla yüklendi!")
-                st.balloons()
+                st.balloons()  # 🎈 BALON ÇIKIYOR!
                 
             except Exception as e:
                 st.error(f"❌ Yükleme hatası: {e}")
@@ -216,14 +219,15 @@ with st.sidebar:
     st.markdown("---")
     st.info("💡 İlk kullanımda en az bir PDF yüklemelisiniz")
     
-    # Veritabanı durumu
+    # Veritabanı durumu - METIN SAYISI
     try:
         count = qdrant_client.count(collection_name=collection_name)
-        st.metric("📊 Yüklü Metin Sayısı", count.count)
+        st.metric("📊 Yüklü Metin Sayısı", count.count)  # 📊 METIN SAYISI BURADA!
     except:
-        pass
-        
+        st.metric("📊 Yüklü Metin Sayısı", 0)
+
 # CHAT ARAYÜZÜ
+
 
 st.markdown("### 💬 Asistanınıza Soru Sorun")
 
@@ -268,6 +272,7 @@ if prompt := st.chat_input("Sorunuzu yazın... (örn: 'Python'da döngü nedir?'
             })
 
 # YAN PANEL - BİLGİ
+
 with st.sidebar:
     st.markdown("---")
     st.header("📖 Kullanım Kılavuzu")
@@ -290,3 +295,4 @@ with st.sidebar:
     if st.button("🗑️ Sohbeti Temizle"):
         st.session_state.messages = []
         st.rerun()
+
