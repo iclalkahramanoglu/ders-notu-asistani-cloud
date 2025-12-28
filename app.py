@@ -1,6 +1,6 @@
-# ==============================
-# DERS NOTU ANALİZ ASİSTANI - CLOUD VERSİYONU (GÜNCEL)
-# ==============================
+
+# DERS NOTU ANALİZ ASİSTANI - CLOUD
+
 
 import os
 import streamlit as st
@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from groq import Groq
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
-import hashlib
+from sentence_transformers import SentenceTransformer
 
 # Çevre değişkenlerini yükle
 load_dotenv()
@@ -29,8 +29,17 @@ st.title("🎓 Ders Notu Analiz Asistanı - Cloud")
 st.markdown("---")
 
 # ==============================
-# SİSTEM BAŞLATMA
+# EMBEDDING MODEL
 # ==============================
+
+@st.cache_resource
+def load_embedding_model():
+    """Embedding modelini yükle (sadece bir kez)"""
+    return SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+
+embedding_model = load_embedding_model()
+
+# SİSTEM BAŞLATMA
 
 @st.cache_resource
 def initialize_clients():
@@ -78,23 +87,13 @@ groq_client, qdrant_client, collection_name = initialize_clients()
 
 st.markdown("---")
 
-# ==============================
 # YARDIMCI FONKSİYONLAR
-# ==============================
 
 def create_embedding(text):
-    """Basit hash tabanlı embedding (demo için)"""
-    hash_obj = hashlib.sha256(text.encode())
-    hash_int = int(hash_obj.hexdigest(), 16)
-    
-    # 384 boyutlu vektör oluştur
-    embedding = []
-    for i in range(384):
-        embedding.append(((hash_int >> i) & 1) * 2 - 1)
-    
-    return embedding
+    """Gerçek embedding oluştur (sentence-transformers ile)"""
+    return embedding_model.encode(text).tolist()
 
-def search_knowledge(query_text, limit=3):
+def search_knowledge(query_text, limit=5):
     """Bilgi tabanında arama yap"""
     try:
         query_vector = create_embedding(query_text)
@@ -120,17 +119,22 @@ def ask_groq(question, contexts):
     """Groq AI'dan cevap al"""
     
     # Context'leri birleştir
-    context_text = "\n\n".join(contexts) if contexts else "Bilgi bulunamadı."
+    if contexts and len(contexts) > 0:
+        context_text = "\n\n".join(contexts)
+    else:
+        return "❌ Ders notlarında bu konuyla ilgili bilgi bulunamadı. Lütfen önce PDF yükleyin."
     
     # Prompt oluştur
-    prompt = f"""Sen bir ders notu asistanısın. Aşağıdaki ders notlarına dayanarak soruyu cevapla.
+    prompt = f"""Sen bir ders notu asistanısın. Aşağıdaki ders notlarına SADECE dayanarak soruyu cevapla.
 
 DERS NOTLARI:
 {context_text}
 
 SORU: {question}
 
-CEVAP (sadece Türkçe, notlara dayanarak):"""
+ÖNEMLİ: Sadece yukarıdaki notlarda yazan bilgileri kullan. Eğer cevap notlarda yoksa "Bu bilgi notlarda bulunmuyor" de.
+
+CEVAP (Türkçe):"""
     
     try:
         response = groq_client.chat.completions.create(
@@ -138,15 +142,15 @@ CEVAP (sadece Türkçe, notlara dayanarak):"""
             messages=[
                 {
                     "role": "system",
-                    "content": "Sen yardımcı bir ders notu asistanısın. Sadece verilen notlara dayanarak Türkçe cevap veriyorsun."
+                    "content": "Sen yardımcı bir ders notu asistanısın. SADECE verilen notlara dayanarak Türkçe cevap veriyorsun. Notlarda olmayan bilgileri uydurma."
                 },
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            temperature=0.7,
-            max_tokens=1000,
+            temperature=0.5,
+            max_tokens=1500,
         )
         
         return response.choices[0].message.content
@@ -154,12 +158,10 @@ CEVAP (sadece Türkçe, notlara dayanarak):"""
     except Exception as e:
         return f"❌ Groq hatası: {str(e)}"
 
-# ==============================
 # PDF YÜKLEME (Admin Panel)
-# ==============================
 
 with st.sidebar:
-    st.header(" Ders Notu Yükle")
+    st.header("📤 Ders Notu Yükle")
     
     uploaded_file = st.file_uploader("PDF yükle", type=['pdf'])
     
@@ -174,37 +176,54 @@ with st.sidebar:
                 for page_num, page in enumerate(pdf_reader.pages):
                     text = page.extract_text()
                     if text.strip():
-                        # Metin parçalarına böl (500 karakter)
-                        chunks = [text[i:i+500] for i in range(0, len(text), 500)]
+                        # Metin parçalarına böl (800 karakter, daha iyi sonuçlar için)
+                        chunks = [text[i:i+800] for i in range(0, len(text), 600)]
                         text_chunks.extend(chunks)
                 
+                # İlerleme göster
+                progress_bar = st.progress(0)
+                
                 # Qdrant'a kaydet
-                points = []
-                for idx, chunk in enumerate(text_chunks):
-                    vector = create_embedding(chunk)
-                    point = PointStruct(
-                        id=hash(chunk + str(idx)) % (10 ** 8),  # Unique ID
-                        vector=vector,
-                        payload={"text": chunk, "source": uploaded_file.name}
+                batch_size = 10
+                for i in range(0, len(text_chunks), batch_size):
+                    batch = text_chunks[i:i+batch_size]
+                    points = []
+                    
+                    for idx, chunk in enumerate(batch):
+                        vector = create_embedding(chunk)
+                        point = PointStruct(
+                            id=hash(chunk + str(i + idx)) % (10 ** 8),
+                            vector=vector,
+                            payload={"text": chunk, "source": uploaded_file.name}
+                        )
+                        points.append(point)
+                    
+                    qdrant_client.upsert(
+                        collection_name=collection_name,
+                        points=points
                     )
-                    points.append(point)
+                    
+                    # İlerleme güncelle
+                    progress = min((i + batch_size) / len(text_chunks), 1.0)
+                    progress_bar.progress(progress)
                 
-                qdrant_client.upsert(
-                    collection_name=collection_name,
-                    points=points
-                )
-                
-                st.success(f"✅ {len(text_chunks)} metin parçası yüklendi!")
+                st.success(f"✅ {len(text_chunks)} metin parçası başarıyla yüklendi!")
+                st.balloons()
                 
             except Exception as e:
                 st.error(f"❌ Yükleme hatası: {e}")
     
     st.markdown("---")
-    st.caption(" İlk kullanımda PDF yüklemelisiniz")
-
-# ==============================
+    st.info("💡 İlk kullanımda en az bir PDF yüklemelisiniz")
+    
+    # Veritabanı durumu
+    try:
+        count = qdrant_client.count(collection_name=collection_name)
+        st.metric("📊 Yüklü Metin Sayısı", count.count)
+    except:
+        pass
+        
 # CHAT ARAYÜZÜ
-# ==============================
 
 st.markdown("### 💬 Asistanınıza Soru Sorun")
 
@@ -218,7 +237,7 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Kullanıcı inputu
-if prompt := st.chat_input("Sorunuzu yazın..."):
+if prompt := st.chat_input("Sorunuzu yazın... (örn: 'Python'da döngü nedir?')"):
     
     # Kullanıcı mesajı
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -230,7 +249,12 @@ if prompt := st.chat_input("Sorunuzu yazın..."):
         with st.spinner("🔍 Notlarda arıyorum..."):
             
             # Bilgi tabanında ara
-            contexts = search_knowledge(prompt)
+            contexts = search_knowledge(prompt, limit=5)
+            
+            # Debug bilgisi (geliştirme için)
+            if len(contexts) > 0:
+                with st.expander("📚 Bulunan kaynak sayısı"):
+                    st.write(f"{len(contexts)} adet ilgili metin parçası bulundu")
             
             # Groq'tan cevap al
             answer = ask_groq(prompt, contexts)
@@ -243,23 +267,22 @@ if prompt := st.chat_input("Sorunuzu yazın..."):
                 "content": answer
             })
 
-# ==============================
 # YAN PANEL - BİLGİ
-# ==============================
 with st.sidebar:
     st.markdown("---")
-    st.header(" Kullanım Kılavuzu")
+    st.header("📖 Kullanım Kılavuzu")
     
     st.markdown("""
-    **Adımlar:**
-    1. Sol panelden PDF yükleyin
-    2. Soru sorun
+    **Nasıl Kullanılır:**
+    1. Yukarıdan PDF yükleyin
+    2. Alt kısımda soru sorun
     3. AI notlardan bilgi bulup cevaplar
     
     **Örnek Sorular:**
-    - "Python nedir?"
-    - "Döngüler nasıl çalışır?"
+    - "Bu derste hangi konular var?"
+    - "Python'da döngü nedir?"
     - "Fonksiyon örnekleri ver"
+    - "Liste ve tuple farkı nedir?"
     """)
     
     st.markdown("---")
@@ -267,5 +290,3 @@ with st.sidebar:
     if st.button("🗑️ Sohbeti Temizle"):
         st.session_state.messages = []
         st.rerun()
-    
-    
