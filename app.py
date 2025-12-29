@@ -1,7 +1,6 @@
 
 # DERS NOTU ANALİZ ASİSTANI 
 
-
 import os
 import streamlit as st
 from dotenv import load_dotenv
@@ -29,8 +28,6 @@ st.title("Ders Notu Analiz Asistanı")
 st.markdown("---")
 
 # EMBEDDING MODEL
-
-
 @st.cache_resource
 def load_embedding_model():
     """Embedding modelini yükle (sadece bir kez)"""
@@ -38,16 +35,11 @@ def load_embedding_model():
 
 embedding_model = load_embedding_model()
 
-
 # SİSTEM BAŞLATMA
-
-
 @st.cache_resource
 def initialize_clients():
     """API istemcilerini başlat"""
-    
     with st.spinner("🔧 Sistem başlatılıyor..."):
-        
         # Groq Client
         st.info("🤖 Groq AI bağlantısı kuruluyor...")
         try:
@@ -89,8 +81,6 @@ groq_client, qdrant_client, collection_name = initialize_clients()
 st.markdown("---")
 
 # YARDIMCI FONKSİYONLAR
-
-
 def create_embedding(text):
     """Gerçek embedding oluştur (sentence-transformers ile)"""
     return embedding_model.encode(text).tolist()
@@ -131,13 +121,9 @@ def ask_groq(question, contexts):
 
 DERS NOTLARI:
 {context_text}
-
 SORU: {question}
-
 ÖNEMLİ: Sadece yukarıdaki notlarda yazan bilgileri kullan. Eğer cevap notlarda yoksa "Bu bilgi notlarda bulunmuyor" de.
-
 CEVAP (Türkçe):"""
-    
     try:
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -161,7 +147,6 @@ CEVAP (Türkçe):"""
         return f"❌ Groq hatası: {str(e)}"
 
 # PDF YÜKLEME (Admin Panel)
-
 
 with st.sidebar:
     st.header("📤 Ders Notu Yükle")
@@ -228,7 +213,6 @@ with st.sidebar:
 
 # CHAT ARAYÜZÜ
 
-
 st.markdown("### 💬 Asistanınıza Soru Sorun")
 
 # Chat geçmişi
@@ -272,7 +256,6 @@ if prompt := st.chat_input("Sorunuzu yazın... (örn: 'Python'da döngü nedir?'
             })
 
 # YAN PANEL - BİLGİ
-
 with st.sidebar:
     st.markdown("---")
     st.header("📖 Kullanım Kılavuzu")
@@ -295,4 +278,3 @@ with st.sidebar:
     if st.button("🗑️ Sohbeti Temizle"):
         st.session_state.messages = []
         st.rerun()
-
