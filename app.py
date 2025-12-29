@@ -1,5 +1,5 @@
 
-# DERS NOTU ANALİZ ASİSTANI - CLOUD 
+# DERS NOTU ANALİZ ASİSTANI 
 
 
 import os
@@ -25,7 +25,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("Ders Notu Analiz Asistanı - Cloud")
+st.title("Ders Notu Analiz Asistanı")
 st.markdown("---")
 
 # EMBEDDING MODEL
