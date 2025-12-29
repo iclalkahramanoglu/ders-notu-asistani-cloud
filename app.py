@@ -20,12 +20,12 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
 # Sayfa Ayarları
 st.set_page_config(
-    page_title="🎓 Ders Notu Asistanı",
+    page_title="Ders Notu Asistanı",
     page_icon="📚",
     layout="wide"
 )
 
-st.title("🎓 Ders Notu Analiz Asistanı - Cloud")
+st.title("Ders Notu Analiz Asistanı - Cloud")
 st.markdown("---")
 
 # EMBEDDING MODEL
